@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Ambient orb animations ─────────────────────────────────────────────────
+   Defined here in plain CSS so they're always available regardless of
+   Tailwind's JIT purge. Used in page.tsx via style={{ animation: '...' }}.
+─────────────────────────────────────────────────────────────────────────── */
+@keyframes orbDrift1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(-30px, 25px) scale(1.04); }
+  66%       { transform: translate(18px, -18px) scale(0.97); }
+}
+@keyframes orbDrift2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  40%      { transform: translate(40px, -25px) scale(1.06); }
+  70%      { transform: translate(-15px, 15px) scale(0.96); }
+}
+@keyframes orbDrift3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-45px, 30px) scale(1.08); }
+}
+@keyframes orbDrift4 {
+  0%, 100% { transform: translate(0, 0); }
+  60%      { transform: translate(25px, -40px); }
+}
