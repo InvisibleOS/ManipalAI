@@ -1,6 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
+from app.middleware.exceptions import (
+    AppException,
+    app_exception_handler,
+    http_exception_handler,
+    request_validation_exception_handler,
+    unhandled_exception_handler,
+)
+from app.middleware.middleware import APIKeyMiddleware, configure_rate_limiting
 
 # Initialize the FastAPI app with metadata from config.py
 app = FastAPI(
@@ -8,6 +16,18 @@ app = FastAPI(
     version=settings.VERSION,
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
+
+app.add_middleware(APIKeyMiddleware)
+configure_rate_limiting(app)
+
+app.add_exception_handler(AppException, app_exception_handler)
+app.add_exception_handler(Exception, unhandled_exception_handler)
+app.add_exception_handler(400, http_exception_handler)
+app.add_exception_handler(401, http_exception_handler)
+app.add_exception_handler(403, http_exception_handler)
+app.add_exception_handler(404, http_exception_handler)
+app.add_exception_handler(405, http_exception_handler)
+app.add_exception_handler(422, request_validation_exception_handler)
 
 # Set up CORS middleware to allow the frontend to communicate with the API
 app.add_middleware(
