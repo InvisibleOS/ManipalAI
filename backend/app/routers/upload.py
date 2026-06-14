@@ -1,21 +1,19 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 import os
-from uuid import uuid4
 import pdfplumber
 from groq import Groq
 from dotenv import load_dotenv
 import json
 import re
 
+from app.services.file_handler import save_file  # 🔥 NEW IMPORT
+
 load_dotenv()
 
 router = APIRouter()
 
-UPLOAD_DIR = "uploads"
 MAX_FILE_SIZE = 5 * 1024 * 1024
 ALLOWED_TYPES = ["application/pdf"]
-
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
@@ -52,7 +50,7 @@ def analyze_resume(text: str):
 
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
-            temperature=0.2,  # 🔥 consistency
+            temperature=0.2,
             messages=[{"role": "user", "content": prompt}]
         )
 
@@ -86,11 +84,8 @@ async def upload_resume(file: UploadFile = File(...)):
         if len(content) == 0:
             raise HTTPException(status_code=400, detail="Empty file")
 
-        unique_name = f"{uuid4()}_{file.filename}"
-        file_path = os.path.join(UPLOAD_DIR, unique_name)
-
-        with open(file_path, "wb") as f:
-            f.write(content)
+        # 🔥 USE SERVICE (IMPORTANT CHANGE)
+        file_path = save_file(file, content)
 
         extracted_text = ""
 
@@ -100,13 +95,12 @@ async def upload_resume(file: UploadFile = File(...)):
 
         cleaned_text = clean_text(extracted_text)
 
-        # 🔥 SAVE resume for streaming
+        # Save for streaming
         with open("latest_resume.txt", "w", encoding="utf-8") as f:
             f.write(cleaned_text)
 
         ai_result = analyze_resume(cleaned_text)
 
-        # 🔥 SAVE SCORE DATA (IMPORTANT FIX)
         with open("latest_score.json", "w") as f:
             json.dump(ai_result, f)
 

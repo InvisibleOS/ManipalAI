@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+supabase
+pypdf
+python-docx
+pandas
+openpyxl
+sentence-transformers
+requests
+python-dotenv
+groq
+pydantic
+python-multipart

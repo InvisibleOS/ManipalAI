@@ -1,0 +1,7 @@
+# Ignore runtime files
+latest_resume.txt
+latest_score.json
+temp_uploads/
+
+# Ignore env
+.env
