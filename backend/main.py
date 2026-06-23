@@ -12,7 +12,7 @@ from app.middleware.middleware import APIKeyMiddleware, configure_rate_limiting
 
 # --> ADDED CHAITANYA'S IMPORTS HERE <--
 from app.routers import upload, audio_stream
-from app.routers import upload, audio_stream, chat
+from app.routers import upload, audio_stream, chat, mock_endpoints
 from database import engine, Base
 Base.metadata.create_all(bind=engine)
 
@@ -51,6 +51,7 @@ app.add_middleware(
 app.include_router(upload.router, prefix="/api", tags=["Uploads"])
 app.include_router(audio_stream.router, prefix="/api", tags=["Audio"])
 app.include_router(chat.router, prefix="/api", tags=["Chat"])
+app.include_router(mock_endpoints.router)
 
 # Root Health Check Route
 @app.get("/", tags=["Health"])

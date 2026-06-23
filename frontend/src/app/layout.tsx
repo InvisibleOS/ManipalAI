@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
+import { ChatProvider } from "@/context/ChatContext";
 
 const poppins = Poppins({
   weight: ['300', '400', '500', '600'],
@@ -20,6 +21,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${poppins.className} flex flex-col h-screen bg-white m-0 p-0 overflow-hidden`}>
+        <ChatProvider>
 
         {/* Top Header */}
         <header
@@ -71,6 +73,7 @@ export default function RootLayout({
         <div className="flex-1 flex overflow-hidden relative">
           {children}
         </div>
+        </ChatProvider>
       </body>
     </html>
   );
