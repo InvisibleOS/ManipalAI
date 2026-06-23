@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database import get_db
-from app.crud import placements as crud_placements
+from crud import placements as crud_placements
 
 router = APIRouter(prefix="/mock", tags=["API Endpoints"])
 
