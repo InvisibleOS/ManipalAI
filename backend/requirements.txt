@@ -5,16 +5,7 @@ groq
 pdfplumber
 python-multipart
 uvicorn[standard]
-groq
-python-dotenv
-pdfplumber
-python-multipart
 slowapi
-pydantic
-<<<<<<< HEAD
-httpx
-=======
-httpx
->>>>>>> origin/main
 httpx
 sqlalchemy
+httpx
