@@ -11,3 +11,4 @@ pdfplumber
 python-multipart
 slowapi
 pydantic
+httpx
