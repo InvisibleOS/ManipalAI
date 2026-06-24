@@ -22,8 +22,11 @@ async def chat_endpoint(request: ChatRequest):
                 response=data.get("answer", "No response from AI engine"),
                 sources=data.get("sources", [])
             )
-    except httpx.RequestError:
-        raise HTTPException(status_code=503, detail="Unable to connect to AI Engine.")
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Unable to connect to AI Engine ({type(e).__name__}).",
+        )
     except httpx.HTTPStatusError as e:
         upstream_status = e.response.status_code
         raise HTTPException(
