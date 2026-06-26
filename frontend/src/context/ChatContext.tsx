@@ -79,6 +79,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const activeSession = sessions.find(s => s.id === activeSessionId) || null;
 
   const createSession = () => {
+    // If a chat with no messages already exists, don't spawn another empty one —
+    // reuse it (prefer the active chat when it's already empty).
+    const emptySession =
+      sessions.find(s => s.id === activeSessionId && s.messages.length === 0) ??
+      sessions.find(s => s.messages.length === 0);
+    if (emptySession) {
+      setActiveSessionId(emptySession.id);
+      return emptySession.id;
+    }
+
     const newId = Math.random().toString(36).substring(2, 11);
     const newSession: ChatSession = {
       id: newId,
