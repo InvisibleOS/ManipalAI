@@ -3,6 +3,8 @@ import { Poppins } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
 import { ChatProvider } from "@/context/ChatContext";
+import InterviewModeButton from "@/components/InterviewModeButton";
+import InterviewLiveHost from "@/components/InterviewLiveHost";
 
 const poppins = Poppins({
   weight: ['300', '400', '500', '600'],
@@ -51,6 +53,7 @@ export default function RootLayout({
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <InterviewModeButton />
             <Link
               href="/placement"
               className="text-xs text-white border border-white/30 hover:border-white/50 hover:bg-white/10 rounded px-3 py-1.5 font-medium transition-all"
@@ -73,6 +76,9 @@ export default function RootLayout({
         <div className="flex-1 flex overflow-hidden relative">
           {children}
         </div>
+
+        {/* Global immersive Interview Mode overlay (launched from the header) */}
+        <InterviewLiveHost />
         </ChatProvider>
       </body>
     </html>

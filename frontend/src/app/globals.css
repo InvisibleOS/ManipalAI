@@ -24,3 +24,22 @@
   0%, 100% { transform: translate(0, 0); }
   60%      { transform: translate(25px, -40px); }
 }
+
+/* ── Interview "Live" mode orb ───────────────────────────────────────────── */
+@keyframes ivBreathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+@keyframes ivSpinSlow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes ivRingPulse {
+  0%   { transform: scale(0.9); opacity: 0.55; }
+  70%  { transform: scale(1.6); opacity: 0; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+@keyframes ivFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

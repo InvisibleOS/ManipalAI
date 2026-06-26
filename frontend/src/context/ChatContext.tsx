@@ -27,6 +27,9 @@ interface ChatContextType {
   sendMessage: (text: string, activeTool: string | null) => Promise<void>;
   setActiveSessionId: (id: string | null) => void;
   activeSession: ChatSession | null;
+  isInterviewOpen: boolean;
+  openInterview: () => void;
+  closeInterview: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -36,6 +39,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isInterviewOpen, setIsInterviewOpen] = useState(false);
+
+  const openInterview = () => setIsInterviewOpen(true);
+  const closeInterview = () => setIsInterviewOpen(false);
 
   // Load sessions from localStorage on mount
   useEffect(() => {
@@ -258,7 +265,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         deleteSession,
         sendMessage,
         setActiveSessionId,
-        activeSession
+        activeSession,
+        isInterviewOpen,
+        openInterview,
+        closeInterview
       }}
     >
       {children}
