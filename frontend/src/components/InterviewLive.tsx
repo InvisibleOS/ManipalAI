@@ -6,10 +6,11 @@ import type Vapi from '@vapi-ai/web';
 /**
  * Gemini-Live–style mock interview, powered by the Vapi Web SDK.
  *
- * Vapi runs the full real-time voice↔voice loop (STT + LLM + TTS over WebRTC),
- * so this component just opens a call to a configured Vapi assistant and renders
- * an immersive overlay driven by Vapi's events:
- *   call-start → speech-start/end → volume-level (orb) → message (transcripts) → call-end
+ * Flow: open → SETUP (pick interview parameters) → START → live voice↔voice call.
+ * Vapi runs the full real-time loop (STT + LLM + TTS over WebRTC); this component
+ * collects the candidate's preferences, passes them to the assistant as
+ * `assistantOverrides.variableValues` (available as {{key}} inside the Vapi
+ * assistant prompt), and renders an immersive overlay driven by Vapi events.
  *
  * Configure via Vercel/`.env`:
  *   NEXT_PUBLIC_VAPI_PUBLIC_KEY    – Vapi public (web) key
@@ -18,6 +19,16 @@ import type Vapi from '@vapi-ai/web';
 
 type Phase = 'connecting' | 'listening' | 'speaking' | 'ended' | 'error';
 type Turn = { role: 'user' | 'assistant'; content: string };
+
+interface InterviewConfig {
+  type: string;
+  role: string;
+  field: string;
+  experience: string;
+  difficulty: string;
+  focus: string;
+  company: string;
+}
 
 interface InterviewLiveProps {
   open: boolean;
@@ -34,6 +45,21 @@ interface VapiMessage {
 const PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY;
 const ASSISTANT_ID = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID;
 
+const INTERVIEW_TYPES = ['Technical', 'Behavioral', 'HR / General', 'System Design', 'Case Study', 'Mixed'];
+const FIELDS = ['Software Engineering', 'Data Science / ML', 'Product Management', 'Electronics / ECE', 'Mechanical', 'Finance', 'Consulting', 'Other'];
+const EXPERIENCE_LEVELS = ['Final-year student / Fresher', 'Internship level', '0–2 years', '2–5 years', '5+ years'];
+const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
+
+const DEFAULT_CONFIG: InterviewConfig = {
+  type: 'Technical',
+  role: '',
+  field: 'Software Engineering',
+  experience: 'Final-year student / Fresher',
+  difficulty: 'Medium',
+  focus: '',
+  company: '',
+};
+
 const PHASE_LABEL: Record<Phase, string> = {
   connecting: 'Connecting…',
   listening: 'Listening…',
@@ -42,22 +68,43 @@ const PHASE_LABEL: Record<Phase, string> = {
   error: 'Connection error',
 };
 
+function buildFirstMessage(cfg: InterviewConfig): string {
+  const at = cfg.company.trim() ? ` for a role at ${cfg.company.trim()}` : '';
+  return (
+    `Hello! I'll be your interviewer today for a ${cfg.difficulty.toLowerCase()} ${cfg.type} interview ` +
+    `for the ${cfg.role.trim() || 'candidate'} position in ${cfg.field}${at}. ` +
+    `Let's begin — could you start by telling me a little about yourself?`
+  );
+}
+
 export default function InterviewLive({ open, onClose }: InterviewLiveProps) {
+  const [started, setStarted] = useState(false);
+  const [config, setConfig] = useState<InterviewConfig>(DEFAULT_CONFIG);
+
   const [phase, setPhase] = useState<Phase>('connecting');
   const [transcript, setTranscript] = useState<Turn[]>([]);
   const [partialUser, setPartialUser] = useState('');
   const [partialAssistant, setPartialAssistant] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
-  const [showTranscript, setShowTranscript] = useState(false);
 
   const vapiRef = useRef<Vapi | null>(null);
   const orbRef = useRef<HTMLDivElement | null>(null);
+  const configRef = useRef<InterviewConfig>(config);
 
   const setOrbLevel = (scale: number) => orbRef.current?.style.setProperty('--iv-level', String(scale));
 
+  // Reset back to the setup form whenever the overlay is closed (deferred so no
+  // setState runs synchronously inside the effect body).
   useEffect(() => {
-    if (!open) return;
+    if (open) return;
+    const id = setTimeout(() => setStarted(false), 0);
+    return () => clearTimeout(id);
+  }, [open]);
+
+  // Live Vapi session — only runs once the user has started the interview.
+  useEffect(() => {
+    if (!open || !started) return;
     let cancelled = false;
 
     const run = async () => {
@@ -113,8 +160,23 @@ export default function InterviewLive({ open, onClose }: InterviewLiveProps) {
         }
       });
 
+      // Pass the candidate's chosen parameters to the interviewer assistant.
+      const cfg = configRef.current;
+      const overrides: Parameters<typeof vapi.start>[1] = {
+        variableValues: {
+          interviewType: cfg.type,
+          role: cfg.role.trim() || 'Software Engineer',
+          field: cfg.field,
+          experience: cfg.experience,
+          difficulty: cfg.difficulty,
+          focus: cfg.focus.trim() || 'general fundamentals',
+          company: cfg.company.trim() || 'a top company',
+        },
+        firstMessage: buildFirstMessage(cfg),
+      };
+
       try {
-        await vapi.start(ASSISTANT_ID);
+        await vapi.start(ASSISTANT_ID, overrides);
       } catch (err) {
         console.error('Vapi start failed:', err);
         if (!cancelled) {
@@ -134,9 +196,16 @@ export default function InterviewLive({ open, onClose }: InterviewLiveProps) {
       try { vapi?.removeAllListeners(); } catch { /* noop */ }
       try { vapi?.stop(); } catch { /* noop */ }
     };
-  }, [open]);
+  }, [open, started]);
 
   if (!open) return null;
+
+  const updateConfig = (patch: Partial<InterviewConfig>) => setConfig((c) => ({ ...c, ...patch }));
+
+  const startInterview = () => {
+    configRef.current = config;
+    setStarted(true);
+  };
 
   const toggleMute = () => {
     const next = !muted;
@@ -146,9 +215,147 @@ export default function InterviewLive({ open, onClose }: InterviewLiveProps) {
 
   const end = () => {
     try { vapiRef.current?.stop(); } catch { /* noop */ }
+    setStarted(false);
     onClose();
   };
 
+  // ── Setup view ────────────────────────────────────────────────────────────
+  if (!started) {
+    const inputClass =
+      'w-full rounded-xl bg-white/5 border border-white/15 px-3.5 py-2.5 text-sm text-white ' +
+      'placeholder-white/30 focus:outline-none focus:border-manipal-orange/70 transition-colors';
+    return (
+      <div
+        className="fixed inset-0 z-50 flex flex-col items-center text-white overflow-y-auto"
+        style={{ background: 'radial-gradient(120% 90% at 50% 0%, #1a1033 0%, #0b1020 55%, #05060d 100%)' }}
+      >
+        <div className="pointer-events-none absolute -top-24 -left-16 w-96 h-96 rounded-full opacity-25 blur-3xl"
+             style={{ background: '#f37021', animation: 'orbDrift1 14s ease-in-out infinite' }} />
+
+        <div className="w-full max-w-lg px-6 py-8 z-10" style={{ animation: 'ivFadeIn 0.4s ease' }}>
+          <div className="flex items-start justify-between mb-6">
+            <div>
+              <h2 className="text-xl font-semibold">Set up your interview</h2>
+              <p className="text-[12px] text-white/50 mt-1">These preferences are sent to your interviewer.</p>
+            </div>
+            <button
+              type="button"
+              onClick={end}
+              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 flex items-center justify-center transition-colors cursor-pointer"
+              title="Close"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1.5">Interview type</label>
+              <div className="flex flex-wrap gap-2">
+                {INTERVIEW_TYPES.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => updateConfig({ type: t })}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer ${
+                      config.type === t
+                        ? 'bg-manipal-orange border-manipal-orange text-white'
+                        : 'bg-white/5 border-white/15 text-white/70 hover:border-white/30'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1.5">Role / Position</label>
+              <input
+                className={inputClass}
+                value={config.role}
+                onChange={(e) => updateConfig({ role: e.target.value })}
+                placeholder="e.g. Software Engineer, Data Analyst"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1.5">Field</label>
+                <select
+                  className={`${inputClass} appearance-none cursor-pointer`}
+                  value={config.field}
+                  onChange={(e) => updateConfig({ field: e.target.value })}
+                >
+                  {FIELDS.map((f) => <option key={f} value={f} className="bg-[#1a1033]">{f}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1.5">Difficulty</label>
+                <select
+                  className={`${inputClass} appearance-none cursor-pointer`}
+                  value={config.difficulty}
+                  onChange={(e) => updateConfig({ difficulty: e.target.value })}
+                >
+                  {DIFFICULTIES.map((d) => <option key={d} value={d} className="bg-[#1a1033]">{d}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1.5">Experience level</label>
+              <select
+                className={`${inputClass} appearance-none cursor-pointer`}
+                value={config.experience}
+                onChange={(e) => updateConfig({ experience: e.target.value })}
+              >
+                {EXPERIENCE_LEVELS.map((x) => <option key={x} value={x} className="bg-[#1a1033]">{x}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1.5">Focus areas <span className="normal-case text-white/30">(optional)</span></label>
+              <input
+                className={inputClass}
+                value={config.focus}
+                onChange={(e) => updateConfig({ focus: e.target.value })}
+                placeholder="e.g. DSA, OOP, DBMS, System Design"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1.5">Target company <span className="normal-case text-white/30">(optional)</span></label>
+              <input
+                className={inputClass}
+                value={config.company}
+                onChange={(e) => updateConfig({ company: e.target.value })}
+                placeholder="e.g. Google, JP Morgan"
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={startInterview}
+            disabled={!config.role.trim()}
+            className="mt-7 w-full py-3 rounded-xl bg-manipal-orange hover:bg-orange-600 text-white font-semibold text-sm transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+            Start Interview
+          </button>
+          {!config.role.trim() && (
+            <p className="text-center text-[11px] text-white/40 mt-2">Enter a role to begin.</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Live call view ────────────────────────────────────────────────────────
   const lastUserFinal = [...transcript].reverse().find((t) => t.role === 'user')?.content ?? '';
   const lastBotFinal = [...transcript].reverse().find((t) => t.role === 'assistant')?.content ?? '';
   const botLine = partialAssistant || lastBotFinal;
@@ -177,7 +384,7 @@ export default function InterviewLive({ open, onClose }: InterviewLiveProps) {
           <span className="w-2.5 h-2.5 rounded-full" style={{ background: accent, boxShadow: `0 0 10px ${accent}` }} />
           <div className="leading-tight">
             <p className="text-sm font-semibold tracking-wide">Interview Mode · Live</p>
-            <p className="text-[11px] text-white/50">Voice-to-voice mock interview · powered by Vapi</p>
+            <p className="text-[11px] text-white/50">{config.type} · {config.role.trim() || config.field}</p>
           </div>
         </div>
         <button
@@ -257,39 +464,8 @@ export default function InterviewLive({ open, onClose }: InterviewLiveProps) {
         </div>
       </div>
 
-      {/* Transcript drawer */}
-      {showTranscript && (
-        <div className="w-full max-w-2xl px-6 z-10 shrink-0">
-          <div className="max-h-44 overflow-y-auto rounded-2xl bg-white/5 border border-white/10 p-4 space-y-3 backdrop-blur-sm">
-            {transcript.length === 0 ? (
-              <p className="text-xs text-white/40 text-center">The conversation will appear here.</p>
-            ) : (
-              transcript.map((t, i) => (
-                <div key={i} className={t.role === 'user' ? 'text-right' : 'text-left'}>
-                  <span className="text-[10px] uppercase tracking-wide text-white/40">
-                    {t.role === 'user' ? 'You' : 'Interviewer'}
-                  </span>
-                  <p className={`text-sm ${t.role === 'user' ? 'text-orange-200' : 'text-white/85'}`}>{t.content}</p>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Controls */}
       <div className="w-full flex items-center justify-center gap-4 px-6 py-7 z-10 shrink-0">
-        <button
-          type="button"
-          onClick={() => setShowTranscript((s) => !s)}
-          className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 flex items-center justify-center transition-colors cursor-pointer"
-          title={showTranscript ? 'Hide transcript' : 'Show transcript'}
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h8M8 14h5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </button>
-
         <button
           type="button"
           onClick={toggleMute}
