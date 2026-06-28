@@ -4,6 +4,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  pull-requests: write
+
 jobs:
   frontend-check:
     name: Frontend Build Check
@@ -169,12 +172,12 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const frontendStatus   = '${{ needs.frontend-check.outputs.status }}';
-            const backendStatus    = '${{ needs.backend-check.outputs.status }}';
-            const backendSyntax    = '${{ needs.backend-check.outputs.syntax-status }}';
-            const aiStatus         = '${{ needs.ai-engine-check.outputs.status }}';
-            const aiSyntax         = '${{ needs.ai-engine-check.outputs.syntax-status }}';
-            const envStatus        = '${{ needs.repo-structure-check.outputs.env-status }}';
+            const frontendStatus = '${{ needs.frontend-check.outputs.status }}';
+            const backendStatus  = '${{ needs.backend-check.outputs.status }}';
+            const backendSyntax  = '${{ needs.backend-check.outputs.syntax-status }}';
+            const aiStatus       = '${{ needs.ai-engine-check.outputs.status }}';
+            const aiSyntax       = '${{ needs.ai-engine-check.outputs.syntax-status }}';
+            const envStatus      = '${{ needs.repo-structure-check.outputs.env-status }}';
 
             const allPassed = [frontendStatus, backendStatus, backendSyntax, aiStatus, aiSyntax, envStatus]
               .every(s => s.startsWith('✅'));
@@ -183,20 +186,7 @@ jobs:
               ? '🎉 All checks passed!'
               : '⚠️ Some checks failed — see details below.';
 
-            const body = `## CI Check Results
-
-            ${summary}
-
-            | Check | Status |
-            |-------|--------|
-            | Frontend build | ${frontendStatus} |
-            | Backend install | ${backendStatus} |
-            | \`backend/main.py\` syntax | ${backendSyntax} |
-            | AI Engine install | ${aiStatus} |
-            | \`ai-engine/ChatBot/main.py\` syntax | ${aiSyntax} |
-            | \`.env.example\` present | ${envStatus} |
-
-            <sub>Posted automatically by CI · ${new Date().toUTCString()}</sub>`;
+            const body = `## CI Check Results\n\n${summary}\n\n| Check | Status |\n|-------|--------|\n| Frontend build | ${frontendStatus} |\n| Backend install | ${backendStatus} |\n| \`backend/main.py\` syntax | ${backendSyntax} |\n| AI Engine install | ${aiStatus} |\n| \`ai-engine/ChatBot/main.py\` syntax | ${aiSyntax} |\n| \`.env.example\` present | ${envStatus} |\n\n<sub>Posted automatically by CI · ${new Date().toUTCString()}</sub>`;
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
