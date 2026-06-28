@@ -36,9 +36,9 @@ Manipal-Chatbot/
 |---|---|
 | Frontend & UI/UX | Shivansh, Aadil, Ruhani |
 | AI Engineering | Ruhani, Aditya, Akshat |
-| Backend & API | — |
-| Data Engineering | — |
-| DevOps | Arindam |
+| Backend & API | Subhan |
+| Data Engineering | Aadil |
+| DevOps | Arindam , Anish , Sanjayram|
 
 ---
 
