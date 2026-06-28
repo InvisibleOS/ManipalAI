@@ -4,10 +4,15 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  pull-requests: write
+
 jobs:
   frontend-check:
     name: Frontend Build Check
     runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.set-status.outputs.status }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,9 +32,22 @@ jobs:
           cd frontend
           npm run build
 
+      - name: Set status
+        id: set-status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "status=✅ Passed" >> $GITHUB_OUTPUT
+          else
+            echo "status=❌ Failed" >> $GITHUB_OUTPUT
+          fi
+
   backend-check:
     name: Backend Build Check
     runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.set-status.outputs.status }}
+      syntax-status: ${{ steps.set-syntax-status.outputs.status }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -44,9 +62,42 @@ jobs:
           cd backend
           pip install -r requirements.txt
 
+      - name: Check backend/main.py exists and is valid Python
+        id: syntax-check
+        run: |
+          if [ ! -f backend/main.py ]; then
+            echo "❌ backend/main.py not found"
+            exit 1
+          fi
+          python -m py_compile backend/main.py
+          echo "✅ backend/main.py is valid Python"
+
+      - name: Set syntax status
+        id: set-syntax-status
+        if: always()
+        run: |
+          if [ "${{ steps.syntax-check.outcome }}" == "success" ]; then
+            echo "status=✅ Passed" >> $GITHUB_OUTPUT
+          else
+            echo "status=❌ Failed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set status
+        id: set-status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "status=✅ Passed" >> $GITHUB_OUTPUT
+          else
+            echo "status=❌ Failed" >> $GITHUB_OUTPUT
+          fi
+
   ai-engine-check:
     name: AI Engine Build Check
     runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.set-status.outputs.status }}
+      syntax-status: ${{ steps.set-syntax-status.outputs.status }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -60,3 +111,86 @@ jobs:
         run: |
           cd ai-engine/ChatBot
           pip install -r requirements.txt
+
+      - name: Check ai-engine/ChatBot/main.py exists and is valid Python
+        id: syntax-check
+        run: |
+          if [ ! -f ai-engine/ChatBot/main.py ]; then
+            echo "❌ ai-engine/ChatBot/main.py not found"
+            exit 1
+          fi
+          python -m py_compile ai-engine/ChatBot/main.py
+          echo "✅ ai-engine/ChatBot/main.py is valid Python"
+
+      - name: Set syntax status
+        id: set-syntax-status
+        if: always()
+        run: |
+          if [ "${{ steps.syntax-check.outcome }}" == "success" ]; then
+            echo "status=✅ Passed" >> $GITHUB_OUTPUT
+          else
+            echo "status=❌ Failed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set status
+        id: set-status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "status=✅ Passed" >> $GITHUB_OUTPUT
+          else
+            echo "status=❌ Failed" >> $GITHUB_OUTPUT
+          fi
+
+  repo-structure-check:
+    name: Repo Structure Check
+    runs-on: ubuntu-latest
+    outputs:
+      env-status: ${{ steps.env-check.outputs.status }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check .env.example exists
+        id: env-check
+        run: |
+          if [ ! -f .env.example ]; then
+            echo "status=❌ Failed" >> $GITHUB_OUTPUT
+            echo "❌ .env.example not found in repo root"
+            exit 1
+          fi
+          echo "status=✅ Passed" >> $GITHUB_OUTPUT
+          echo "✅ .env.example found"
+
+  pr-comment:
+    name: Post CI Summary Comment
+    runs-on: ubuntu-latest
+    needs: [frontend-check, backend-check, ai-engine-check, repo-structure-check]
+    if: always()
+    steps:
+      - name: Post check results as PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const frontendStatus = '${{ needs.frontend-check.outputs.status }}';
+            const backendStatus  = '${{ needs.backend-check.outputs.status }}';
+            const backendSyntax  = '${{ needs.backend-check.outputs.syntax-status }}';
+            const aiStatus       = '${{ needs.ai-engine-check.outputs.status }}';
+            const aiSyntax       = '${{ needs.ai-engine-check.outputs.syntax-status }}';
+            const envStatus      = '${{ needs.repo-structure-check.outputs.env-status }}';
+
+            const allPassed = [frontendStatus, backendStatus, backendSyntax, aiStatus, aiSyntax, envStatus]
+              .every(s => s.startsWith('✅'));
+
+            const summary = allPassed
+              ? '🎉 All checks passed!'
+              : '⚠️ Some checks failed — see details below.';
+
+            const body = `## CI Check Results\n\n${summary}\n\n| Check | Status |\n|-------|--------|\n| Frontend build | ${frontendStatus} |\n| Backend install | ${backendStatus} |\n| \`backend/main.py\` syntax | ${backendSyntax} |\n| AI Engine install | ${aiStatus} |\n| \`ai-engine/ChatBot/main.py\` syntax | ${aiSyntax} |\n| \`.env.example\` present | ${envStatus} |\n\n<sub>Posted automatically by CI · ${new Date().toUTCString()}</sub>`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
