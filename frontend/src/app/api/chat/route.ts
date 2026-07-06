@@ -4,20 +4,6 @@ import { streamText } from 'ai';
 import { supabase } from '@/utils/db';
 import { embedWithBackoff } from '@/utils/embeddings';
 
-function cosineSimilarity(a: number[], b: number[]): number {
-  if (!a || !b || a.length !== b.length) return 0;
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  if (normA === 0 || normB === 0) return 0;
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-}
-
 export async function POST(request: NextRequest) {
   try {
     const { messages } = await request.json();
@@ -37,45 +23,29 @@ export async function POST(request: NextRequest) {
     // Step 1: Generate a 768-dimensional embedding of the query
     const queryEmbedding = await embedWithBackoff(query);
 
-    // Step 2: Execute similarity searches in parallel by fetching the records and scoring in-memory
-    let announcements: any[] = [];
-    let documents: any[] = [];
+    // Step 2: Execute pgvector similarity searches in SQL (ORDER BY + LIMIT via RPC)
+    let announcements: { title: string; content: string; similarity: number }[] = [];
+    let documents: { title: string; content: string; similarity: number }[] = [];
 
     const [annResult, docResult] = await Promise.all([
-      supabase.from('announcements').select('title, content, embedding'),
-      supabase.from('document_embeddings').select('content, embedding, documents ( title )')
+      supabase.rpc('match_announcements', {
+        query_embedding: queryEmbedding,
+        match_threshold: 0.4,
+        match_count: 3,
+      }),
+      supabase.rpc('match_document_embeddings', {
+        query_embedding: queryEmbedding,
+        match_threshold: 0.5,
+        match_count: 5,
+      }),
     ]);
 
     if (!annResult.error && annResult.data) {
-      announcements = annResult.data
-        .map((ann: any) => {
-          const emb = typeof ann.embedding === 'string' ? JSON.parse(ann.embedding) : ann.embedding;
-          const similarity = cosineSimilarity(queryEmbedding, emb);
-          return {
-            title: ann.title,
-            content: ann.content,
-            similarity
-          };
-        })
-        .filter(ann => ann.similarity > 0.4)
-        .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, 3);
+      announcements = annResult.data as { title: string; content: string; similarity: number }[];
     }
 
     if (!docResult.error && docResult.data) {
-      documents = docResult.data
-        .map((de: any) => {
-          const emb = typeof de.embedding === 'string' ? JSON.parse(de.embedding) : de.embedding;
-          const similarity = cosineSimilarity(queryEmbedding, emb);
-          return {
-            content: de.content,
-            title: de.documents ? (de.documents as any).title : 'Unknown Document',
-            similarity
-          };
-        })
-        .filter(doc => doc.similarity > 0.5)
-        .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, 5);
+      documents = docResult.data as { title: string; content: string; similarity: number }[];
     }
 
     // Step 3: Append retrieved contexts to system prompt
