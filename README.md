@@ -182,4 +182,4 @@ When running, the system generates the following local and cloud-based outputs:
     *   *Fix:* Verify that the AI Engine is running and check that the `AI_ENGINE_URL` parameter in `/backend/.env` matches the port.
 *   **Error: `match_chunks does not exist (FastAPI HTTP 500)`**
     *   *Cause:* The Supabase project does not contain the required vector function.
-    *   *Fix:* Open the Supabase SQL Editor and run the matching procedure SQL script (see details in [Architecture.md](file:///c:/Users/ruhan/OneDrive/Desktop/Manipal-Chatbot/Architecture.md)).
+    *   *Fix:* Open the Supabase SQL Editor and run the matching procedure SQL script (see details in [Architecture.md](Architecture.md)).
